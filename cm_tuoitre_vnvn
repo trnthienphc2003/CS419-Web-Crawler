@@ -1,0 +1,379 @@
+$(function() {
+	/**************************** COMMENT ****************************/
+	// View more comment
+	$('#view_more_comment').on('click', function() {
+		var url = $('#host').val() + '/comment/createiframe';
+		var offset = parseInt($('#offset').val()) + 1;
+		var object_id = $('#object_id').val();
+		var app_id = $('#app_id').val();
+		var layout = $('#comment_layout').val();
+		var type = $('#comment_type').val();
+		var type = $('#comment_type').val();
+		var sort = $('#comment_sort').val();
+	 	var number_all_comments = $('.number_all_comments').eq(-2).val();
+
+		$.ajax({
+			type: 'POST',
+			url: url,
+			data: {offset: offset, app_id: app_id, object_id: object_id, layout: layout, type: type, sort: sort}
+		}).done(function(result) {
+			document.domain = 'tuoitre.vn';
+
+			if ($('.lst-comment').length > 0) {
+				$('.lst-comment').append(result);
+			}
+
+			if ($('.lst-gltt').length > 0) {
+				var group = $('<div/>').html(result).addClass('group-' + offset);
+				$('.lst-gltt').append(group);
+			}
+
+			$('#offset').val(offset);
+
+			if (number_all_comments < 10) {
+				$("#view_more_comment").remove();
+			}
+
+			// Increase height of iframe
+			var iframe = $('#comment_frame', window.parent.document);
+            var height = $(".container").outerHeight() + 10;
+
+            if ($('.lst-gltt').length > 0) {
+            	var image_count = $('.group-' + offset).find('.ck_image').length;
+            	if (image_count > 0) {
+            		height += (356 * image_count);
+            	}
+			}
+
+			iframe.height(height);
+		});
+	});
+
+	/**************************** LIKE ****************************/
+	// Like comment
+	$('body').on('click', '.like_btn', function() {
+		var id = $(this).attr('id');
+		id = id.split('-');
+		var c = id[1];
+		var app_id = $('#app_id').val();
+		var o = $('#object_id').val();
+		var object_id = $('#object').val();
+		var comment_id = $('#comment').val();
+		var object_title = $('#object_title').val();
+
+		var like_number_element = $(this).siblings('.like_number');
+		var like_button_element = $(this);
+
+		if ($(this).parent().hasClass('active')) {
+			var url = $('#host').val() + '/like/unlikecomment';
+		} else {
+			var url = $('#host').val() + '/like/likecomment';
+		}
+
+		$.ajax({
+			type: 'POST',
+			url: url,
+			data: {app_id: app_id, o: o, c: c, object_id: object_id, comment_id: comment_id, object_title: object_title}
+		}).done(function(result) {
+			resultArr = result.split('-');
+			if (parseInt(resultArr[0]) >= 0) {
+				if (like_button_element.parent().hasClass('active')) {
+					var like_number = parseInt(like_number_element.html()) - 1;
+					like_button_element.parent().removeClass('active');
+				} else {
+					var like_number = parseInt(like_number_element.html()) + 1;
+					like_button_element.parent().addClass('active');
+				}
+				like_number_element.html(like_number);
+			} else if (resultArr[0] == 'time_not_expire') {
+				alert('Bạn vui lòng đợi ' + resultArr[1] + ' để tiếp tục thực hiện thao tác này.');
+			} else {
+				console.log('Bạn không được phép thực hiện thao tác này!');
+			}
+		});
+	});
+
+	// Like article
+	$('.tto_object_like_btn').one('click', function() {
+		var app_id = $('#app_id').val();
+		var o = $('#object_id').val();
+		var object_id = $('#object').val();
+		var object_title = $('#object_title').val();
+		var app_id_tracker = $('#app_id_tracker').val();
+		var cat_id = $('#cat_id').val();
+		var host_url = $('#host_url').val();
+		var user_agent = $('#user_agent').val();
+		var layout = $('#comment_layout').val();
+
+ 		var like_number_element = $(this).parent().find('.sl');
+		var like_button = $(this);
+
+		$.ajax({
+			type: 'POST',
+			url: $('#host').val() + '/like/likeobject',
+			data: {app_id: app_id, app_id_tracker: app_id_tracker, o: o, cat_id:cat_id, object_id: object_id, object_title: object_title, user_agent: user_agent, host_url:host_url, layout: layout}
+		}).done(function(result) {
+			resultArr = result.split('-');
+			if (parseInt(resultArr[0]) >= 0) {
+				temp = (like_number_element.html()).split('<span></span>');
+				var like_number = parseInt(temp[1]) + 1;
+				like_number_element.html(like_number);
+				like_button.removeClass('tto_object_like_btn');
+
+				if (layout == 'interactive') {
+					like_button.css('color', '#ed1c24');
+					like_button.css('border-color', '#ed1c24');
+				} else {
+					like_button.css('background-color', '#a2a2a2');
+				}
+
+				// Increase width of iframe
+				if (layout == 'interactive') {
+	            	if ((like_number.toString()).length == temp[1].length + 1) {
+	            		var iframe = $('#comment_frame', window.parent.document);
+	            		var width = $(".container").outerWidth() + 7;
+	            		iframe.width(width);
+	            	}
+	            }
+
+			} else if (resultArr[0] == 'time_not_expire') {
+				alert('Bạn vui lòng đợi ' + resultArr[1] + ' để tiếp tục thực hiện thao tác này.');
+			} else if (resultArr[0] == 'save_error') {
+				alert('Save error!');
+			} else {
+				console.log('Bạn không được phép thực hiện thao tác này!');
+			}
+		});
+	})
+
+	/**************************** REPLY ****************************/
+
+	// Sub comment
+	$('.list-select .option').click(function() {
+		var select = $(this);
+
+		var type_arr = ($(this).attr('id')).split('-');
+		var sort = type_arr[1];
+
+		var app_id = $('#app_id').val();
+		var object_id = $('#object_id').val();
+		var layout = $('#comment_layout').val();
+		var type = $('#comment_type').val();
+
+		$.ajax({
+			type: 'POST',
+			url: $('#site_url').val() + 'comment/createiframe',
+			data: {app_id:app_id, object_id:object_id, sort:sort, layout:layout, type: type}
+		}).done(function(result) {
+			$('.list-select li').removeClass('active');
+			select.parent().addClass('active');
+
+			if ($('.lst-comment').length > 0) {
+				$('.lst-comment').html(result);
+			}
+			if ($('.lst-gltt').length > 0) {
+				$('.lst-gltt').html(result);	
+			}
+
+			$('#comment_sort').val(sort);
+		});
+	})
+
+	if ($('.btn-reply').length > 0) {
+		
+		$('body').on('click', '.btn-reply', function() {
+			document.domain = 'tuoitre.vn';
+
+			$('.wra-comment').removeClass('active');
+
+			$('.content-warning').hide();
+
+			if ($(this).parent().parent().next('.wra-comment').hasClass('active')){
+				$(this).parent().parent().next('.wra-comment').removeClass('active');
+			} else {
+				// Increase height of iframe
+				var iframe = $('#comment_frame', window.parent.document);
+				var height = $('.container').height() + 160;
+				iframe.height(height);
+
+				$(this).parent().parent().next('.wra-comment').addClass('active');
+			}
+		});
+
+		$('body').on('click', '.btn-sub', function() {
+			document.domain = 'tuoitre.vn';
+
+			var flag = localStorage.getItem('comment-flag');
+			var comment_timeout = localStorage.getItem('comment-timeout-' + object_id);
+			var now = getDateTime();
+
+			var remain_time = 0;
+			if (comment_timeout !== null) {
+				var remain_time = parseInt(getDiffDate(comment_timeout, now, 'seconds'));
+				remain_time = 30 - remain_time;
+			}
+
+			if (flag == 1 && ((comment_timeout === null) || (comment_timeout !== null && remain_time <= 0))) {
+				localStorage.clear();
+			}
+
+    		// Check comment timeout
+    		if (remain_time <= 0) {
+				var object_id = $('#object_id').val();
+				var parent_id = $(this).siblings('.parent-id').val();
+				var content = $(this).parent().siblings('.cm_sub_content').val();
+
+				parent.openCommentPopup('infoForm', object_id, content, parent_id);
+			} else {
+				parent.closeCommentPopup('infoForm');
+				parent.openCommentPopup('errorForm');
+			}
+		});	
+		$('body').on('click', '.btn-close-s', function() {
+			$('.wra-comment').removeClass('active');
+		});
+	}
+})
+
+/*
+ * Check valid email
+ */
+function IsEmail(email)
+{
+	var regex = /^([a-zA-Z0-9_\.\-\+])+\@(([a-zA-Z0-9\-])+\.)+([a-zA-Z0-9]{2,4})+$/;
+	return regex.test(email);
+}
+
+function getId(value)
+{
+	var id = value.split('-');
+	return id[1];
+}
+
+function setCookie(cname, cvalue, second) {
+    var d = new Date();
+    d.setTime(d.getTime() + (second * 1000));
+    var expires = "expires="+d.toUTCString();
+    document.cookie = cname + "=" + cvalue + "; " + expires;
+}
+
+function getCookie(cname) {
+    var name = cname + "=";
+    var ca = document.cookie.split(';');
+    for(var i=0; i<ca.length; i++) {
+        var c = ca[i];
+        while (c.charAt(0)==' ') c = c.substring(1);
+        if (c.indexOf(name) != -1) return c.substring(name.length,c.length);
+    }
+    return "";
+}
+
+function getDateTime() {
+    var date = new Date();
+    var year    = date.getFullYear();
+    var month   = date.getMonth() + 1; 
+    var day     = date.getDate();
+    var hour    = date.getHours();
+    var minute  = date.getMinutes();
+    var second  = date.getSeconds(); 
+    if(month.toString().length == 1) {
+        var month = '0' + month;
+    }
+    if(day.toString().length == 1) {
+        var day = '0' + day;
+    }   
+    if(hour.toString().length == 1) {
+        var hour = '0' + hour;
+    }
+    if(minute.toString().length == 1) {
+        var minute = '0' + minute;
+    }
+    if(second.toString().length == 1) {
+        var second = '0' + second;
+    }
+
+    var dateTime = year + '/' + month + '/' + day + ' ' + hour + ':' + minute + ':' + second;   
+    return dateTime;
+}
+
+function getDiffDate(date1, date2, interval) {
+    var second = 1000;
+    var minute = second * 60;
+    var hour = minute * 60;
+    var day = hour * 24;
+    var week = day * 7;
+    date1 = new Date(date1);
+    date2 = new Date(date2);
+    var timediff = date2 - date1;
+    if (isNaN(timediff)) return NaN;
+    switch (interval) {
+        case "years": return date2.getFullYear() - date1.getFullYear();
+        case "months": return (
+            ( date2.getFullYear() * 12 + date2.getMonth() )
+            -
+            ( date1.getFullYear() * 12 + date1.getMonth() )
+        );
+        case "weeks"  : return Math.floor(timediff / week);
+        case "days"   : return Math.floor(timediff / day); 
+        case "hours"  : return Math.floor(timediff / hour); 
+        case "minutes": return Math.floor(timediff / minute);
+        case "seconds": return Math.floor(timediff / second);
+        default: return undefined;
+    }
+}
+
+function openPopup(id) {
+    $("#"+id).fadeIn(100);   
+    var h = $("#"+id+" > .popup").height();
+    $("#"+id+" > .popup").css("margin-top", -h/2);
+    if ($(".scroll-pane").length > 0) {
+        $('.scroll-pane').jScrollPane();
+    }
+}
+
+function closePopup(id) {
+
+    $("#"+id).fadeOut(100);
+    //$("#header > .closepp").remove();
+}
+
+function executeJsWhenAjaxComplete() 
+{
+	var assetUrl = $('#asset_url').val();
+	$.getScript(assetUrl + '/js/comment/js/function.js?v=14');
+}
+
+
+// Get cookie to show whether like or dislike button - Like Comment
+// $('.view_comment_small').each(function() {
+// 	var id = $(this).attr('id');
+// 	id = id.split('comment_div-');
+// 	var key_comment_timeout = 'likecommenttimeout' + id[1];
+// 	var key_comment_flag = 'likecommentflag' + id[1];
+
+// 	var like_comment_flag = 1;
+
+// 	var flag = getCookie(key_comment_flag);
+// 	if (flag != null && flag != '') {
+// 		var timeout = getCookie(key_comment_timeout);
+// 		if (timeout != null && timeout != '' && flag == 0) {
+// 			var current_time = Math.round(new Date().getTime() / 1000);
+// 			if (timeout < current_time) {
+// 				like_comment_flag = 1;
+
+// 				var like_number = parseInt($(this).find('.like_number').text());
+// 				$(this).find('.like_number').text(like_number + 1);
+// 			} else {
+// 				like_comment_flag = 0;
+// 			}
+// 		}
+// 	}
+
+// 	if (like_comment_flag == 1) {
+// 		var like_comment_btn = '<a href="javascript:void(0);" class="like_btn" id="like_comment_id-' + id[1] + '">Thích</a>';
+// 	} else {
+// 		var like_comment_btn = '<a href="javascript:void(0);" class="unlike_btn" id="like_comment_id-' + id[1] + '">Bỏ thích</a>';
+// 	}
+
+// 	$(this).find('.like_comment_div').append(like_comment_btn);
+// });
