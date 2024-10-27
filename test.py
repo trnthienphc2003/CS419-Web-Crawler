@@ -7,11 +7,11 @@ appkey = 'lHLShlUMAshjvNkHmBzNqERFZammKUXB1DjEuXKfWAwkunzW6fFbfrhP/IG0Xwp7aPwhwI
 
 comment_retrival_api = f'{base_api_url}/api/getlist-comment.api'
 
-test_id = '20241025180735251'
+test_id = '20241025203939541'
 resp = httpx.get(comment_retrival_api, params={
     'pageindex': 1,
     'pagesize': 1000,
-    'objId': '20241025180735251',
+    'objId': test_id,
     'objType': 1,
     'objectpopupid': '',
     'commentid': '',
