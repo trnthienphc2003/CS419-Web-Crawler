@@ -1,3 +1,10 @@
 data/
 images/
 audio/
+*.log
+*.yaml
+tuoitre_crawl_clean.py
+test.py
+test_yaml.py
+*.zip
+*.html

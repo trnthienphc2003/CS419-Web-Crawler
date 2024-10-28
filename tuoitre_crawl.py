@@ -4,31 +4,42 @@ import os
 import json
 import datetime
 import time
-import shutil
-import requests
+import yaml
+import argparse
 import logging
 
+# default configurations
 URL = "https://tuoitre.vn"
 API_URL = 'https://id.tuoitre.vn'
 TTS_URL = 'https://tts.mediacdn.vn'
-MAX_CRAWL_PAGES = 1
+MAX_CRAWL_PAGES = 12
 HAS_20_COMMENTS = False
-# APPKEY = 'lHLShlUMAshjvNkHmBzNqERFZammKUXB1DjEuXKfWAwkunzW6fFbfrhP/IG0Xwp7aPwhwIuucLW1TVC9lzmUoA=='
-# CATEGORIES = [
-#     'thoi-su',
-#     'the-gioi',
-#     'giao-duc',
-#     'phap-luat',
-#     'cong-nghe',
-#     'van-hoa',
-#     'giai-tri',
-#     'the-thao',
-# ]
 CATEGORIES = [
-    'du-lich'
+    'thoi-su',
+    'the-gioi',
+    'giao-duc',
+    'phap-luat',
+    'cong-nghe',
+    'van-hoa',
+    'giai-tri',
+    'the-thao',
 ]
 
+# variables for initialisation (or resuming from checkpoint)
+pg_num = 1
+category_index = 0
+
+# Initialise httpx client for request
 client = httpx.Client(timeout=30.0)
+
+def load_ckpt(ckpt_path):
+    try:
+        with open(ckpt_path, 'r') as f:
+            ckpt = yaml.load(f, Loader=yaml.FullLoader)
+        return ckpt
+    except Exception as e:
+        print(f"Failed to load checkpoint: {e}")
+        raise(e)
 
 def get_category_id(category):
     retries = 3
@@ -145,7 +156,7 @@ def get_news_content(url):
             # get body of the news
             body = soup.find('div', class_='detail-content')
             content = ' '.join(p.text.strip() for p in body.find_all('p', recursive=False))
-            print(content)
+            # print(content)
 
             img_file_links = []
             for img in body.find_all('img'):
@@ -155,14 +166,16 @@ def get_news_content(url):
             date = datetime.datetime.strptime(date, '%Y-%m-%dT%H:%M:%S%z')
             year, month, day = date.year, date.month, date.day
             audio_file_links = []
-            for gender in ['nam', 'nu']:
-                # northern accent
-                audio_url = f"{TTS_URL}/{year}/{month}/{day}/tuoitre-{gender}-{postId}.m4a"
-                audio_file_links.append(audio_url)
+            audio_url = f"{TTS_URL}/{year}/{month}/{day}/tuoitre-nam-{postId}.m4a"
+            audio_file_links.append(audio_url)
+            # for gender in ['nam', 'nu']:
+            #     # northern accent
+            #     audio_url = f"{TTS_URL}/{year}/{month}/{day}/tuoitre-{gender}-{postId}.m4a"
+            #     audio_file_links.append(audio_url)
 
-                # southern accent
-                audio_url = f"{TTS_URL}/{year}/{month}/{day}/tuoitre-{gender}-1-{postId}.m4a"
-                audio_file_links.append(audio_url)
+            #     # southern accent
+            #     audio_url = f"{TTS_URL}/{year}/{month}/{day}/tuoitre-{gender}-1-{postId}.m4a"
+            #     audio_file_links.append(audio_url)
 
             return {
                 'postId': postId,
@@ -179,11 +192,33 @@ def get_news_content(url):
     return None
 
 if __name__ == "__main__":
+    # Initialise folders
     os.makedirs(f"./images", exist_ok=True)
     os.makedirs(f"./audio", exist_ok=True)
     os.makedirs(f"./data", exist_ok=True)
-    for category in CATEGORIES:
+
+    # Arguments
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--ckpt_path', type=str, help='Path to checkpoint file')
+    parser.add_argument('--save_ckpt_path', type=str, default='./ckpt.yaml', help='Path to save checkpoint file')
+    args = parser.parse_args()
+
+    logger = logging.getLogger(__name__)
+    logging.basicConfig(filename='tuoitre_crawler.log', level=logging.INFO)
+
+
+    if args.ckpt_path is not None:
+        ckpt = load_ckpt(args.ckpt_path)
+        pg_num = ckpt['pg_num'] + 1
+        category_index = CATEGORIES.index(ckpt['category'])
+        HAS_20_COMMENTS = ckpt.get('HAS_20_COMMENTS', False)
+        logger.info(f"Resuming from checkpoint: {ckpt}")
+    
+    logger.info(f"Starting from page {pg_num} of category {CATEGORIES[category_index]}")
+    while category_index < len(CATEGORIES):
+        category = CATEGORIES[category_index]
         HAS_20_COMMENTS = False
+        print("Crawling category: {}".format(category))
         os.makedirs(f"./data/{category}", exist_ok=True)
         # if os.path.exists(f"./crawled_news/{category}/images"):
         #     shutil.rmtree(f"./crawled_news/{category}/images")
@@ -191,20 +226,29 @@ if __name__ == "__main__":
         category_id = get_category_id(category)
         # print(category_id)
         news = []
-        for pg_num in range(1, MAX_CRAWL_PAGES + 1):
+        while pg_num <= MAX_CRAWL_PAGES:
+            logger.info(f"Category: {category}, Page: {pg_num}")
             if HAS_20_COMMENTS and pg_num > 5:
                 break
             url = f"{URL}/timeline/{category_id}/trang-{pg_num}.htm"
             # print(url)
+            prev_HAS_20_COMMENTS = HAS_20_COMMENTS
             news_links = get_news_links(url)
             print(len(news_links))
             for news_link in news_links:
                 news_url = f"{URL}{news_link}"
                 news_post = get_news_content(news_url)
+                if news_post is None:
+                    print(f"Failed to get news content for {news_url}")
+                    logger.info(f"Failed to get news content for {news_url}")
+                    time.sleep(10) # avoid getting blocked
+                    continue
 
                 news_post_id = news_post['postId']
                 comments = get_comments(news_post_id)
                 news_post['comments'] = comments
+                if len(comments) >= 20:
+                    HAS_20_COMMENTS = True
 
                 os.makedirs(f"./images/{news_post_id}", exist_ok=True)
                 os.makedirs(f"./audio/{news_post_id}", exist_ok=True)
@@ -213,7 +257,7 @@ if __name__ == "__main__":
 
                 # download images
                 for img_cnt, img_url in enumerate(news_post['img_files_url']):
-                    print(img_url)
+                    # print(img_url)
                     retries = 3
                     img_response = None
                     for i in range(retries):
@@ -261,7 +305,22 @@ if __name__ == "__main__":
                     audio_name = audio_url.split('/')[-1]
                     with open(f"./audio/{news_post_id}/{audio_name}", 'wb') as f:
                         f.write(audio_response.content)
-
+                
+            # Commit checkpoint of last successful page
+            ckpt = {
+                'pg_num': pg_num,
+                'category': category,
+                'HAS_20_COMMENTS': prev_HAS_20_COMMENTS
+            }
+            with open(args.save_ckpt_path, 'w') as f:
+                yaml.dump(ckpt, f)
+            logger.info(f"Saved for checkpoint: {ckpt}")
+            print(f"Saved for checkpoint: {ckpt}")
+            pg_num += 1
+        category_index += 1
+        pg_num = 1
+        logger.info(f"Finished crawling category {category}")
+        print("Done with {}".format(category))
                 # print(news_post)
                 # print(comments)
                 # for news in get_news_content(news_url):
